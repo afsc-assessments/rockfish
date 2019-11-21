@@ -1,0 +1,20 @@
+# Data for Maturity Model Runs
+# Number of ages (nages)
+50
+#
+# Lunsford et al Data
+#
+# Total number of fish observed by age (L_tot_na)
+-9 -9 -9 -9 -9 -9 -9 -9 2 16 10 14 6 2 -9 2 -9 -9 4 3 1 1 1 -9 -9 -9 -9 -9 2 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9
+# Number of mature fish observed by age (L_mat_na)
+-9 -9 -9 -9 -9 -9 -9 -9 1 7 3 7 5 2 -9 2 -9 -9 4 3 1 1 1 -9 -9 -9 -9 -9 2 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9
+#
+# Chilton et al Data
+#
+# Total number of fish observed by age (C_tot_na)
+-9 -9 2 2 7 12 12 20 30 25 11 8 14 1 4 3 5 -9 3 4 2 -9 4 3 3 -9 -9 4 2 3 -9 1 2 -9 -9 -9 -9 -9 2 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 1
+#
+# Number of mature fish observed by age (C_mat_na)
+-9 -9 0 0 0 0 5 8 16 18 10 5 10 1 3 2 4 -9 3 3 2 -9 4 3 3 -9 -9 4 2 3 -9 1 2 -9 -9 -9 -9 -9 2 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 1
+#Weight
+-9 -9 50 50 50 1 1 1 1 1 1 1 1 1 1 1 1 -9 1 1 1 -9 1 1 1 -9 -9 1 1 1 -9 1 1 -9 -9 -9 -9 -9 1 -9 -9 -9 -9 -9 -9 -9 -9 -9 -9 1
