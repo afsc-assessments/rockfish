@@ -33,3 +33,31 @@ nork
 *.exe
 *.out
 *.app
+
+# Standard ADMB output files
+*.bar
+*.cor
+*.par
+*.rep
+*.std
+admodel.cov
+admodel.hes
+admodel.dep
+fmin.log
+*.b0*
+*.cpp
+*.ecm
+*.eva
+*.htp
+*.mc2
+*.mcm
+*.p0*
+*.r0*
+*.log
+
+# MCMC outputs
+*.psv
+adaptation.csv
+rwm_lp.txt
+sims
+unbounded.csv
