@@ -1,1 +1,0 @@
-../../src/dusky.tpl

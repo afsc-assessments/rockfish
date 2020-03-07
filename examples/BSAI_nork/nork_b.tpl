@@ -1,1 +1,0 @@
-../../src/nork_b.tpl
