@@ -446,7 +446,8 @@ PROCEDURE_SECTION
   Get_Numbers_At_Age();                                        // Call function to get numbers at age per year
   Get_Catch_at_Age();                                          // Call function to get catch at age per year
   Get_Predicted_Values();                                      // Get predicted values for catch, survbio, age and size comps
-  if (last_phase())
+ // cole added the mc_phase check to get MCMC working
+ if (last_phase() & !mc_phase())
   {
     Get_Dependent_Vars();                                      // Solve for dependent variables like total bio, recruitment etc.
     Compute_SPR_Rates();                                       // Compute f40 etc.
