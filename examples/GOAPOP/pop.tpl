@@ -719,7 +719,7 @@ FUNCTION Get_Population_Projection
 
 //  Abundance at start of first projection year
   int k;
-
+  FABC_tot_proj.initialize();
 // Recruitment in endyr+1
   if(mceval_phase()) {
     stdev_rec = sqrt(norm2(value(log_rec_dev(1977 + recage,endyr - recage))-mean(value(log_rec_dev(1977 + recage,endyr - recage))))/(size_count(value(log_rec_dev(1977 + recage,endyr - recage))) - 1));
