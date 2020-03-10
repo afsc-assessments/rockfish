@@ -446,14 +446,13 @@ PROCEDURE_SECTION
   Get_Numbers_At_Age();                                        // Call function to get numbers at age per year
   Get_Catch_at_Age();                                          // Call function to get catch at age per year
   Get_Predicted_Values();                                      // Get predicted values for catch, survbio, age and size comps
- // cole added the mc_phase check to get MCMC working
- if (last_phase() & !mc_phase())
-  {
+ if (last_phase())
+  { 
     Get_Dependent_Vars();                                      // Solve for dependent variables like total bio, recruitment etc.
     Compute_SPR_Rates();                                       // Compute f40 etc.
-    Get_Population_Projection();                               // Get 15 year population projection
+      Get_Population_Projection();                               // Get 15 year population projection
   }
-  Evaluate_Objective_Function();                               // Minimize objective function value
+ Evaluate_Objective_Function();                               // Minimize objective function value
   if (mceval_phase())                                          // For outputting MCMC simulations in text format
   {
      evalout<<sigr<<" "<<q_srv1<<" "<<q_srv2<<" "<<F40<<" "<<natmort<<" "<<" "<<ABC<<" "<<obj_fun<<" "<<tot_biom<<" "<<log_rec_dev<<" "<<spawn_biom<<" "<<log_mean_rec<<" "<<spawn_biom_proj<<" "<<pred_catch_proj<<" "<<N_proj(endyr+1,1)<<" "<<N_proj(endyr+2,1)<<" "<<N_proj(endyr+3,1)<<" "<<N_proj(endyr+4,1)<<" "<<N_proj(endyr+5,1)<<" "<<N_proj(endyr+6,1)<<" "<<N_proj(endyr+7,1)<<" "<<N_proj(endyr+8,1)<<" "<<N_proj(endyr+9,1)<<" "<<N_proj(endyr+10,1)<<" "<<tot_biom_proj(endyr+1)<<" "<<tot_biom_proj(endyr+2)<<" "<<pred_srv1<<" "<<endl;
@@ -719,7 +718,7 @@ FUNCTION Get_Population_Projection
 
 //  Abundance at start of first projection year
   int k;
-
+ FABC_tot_proj.initialize();
 // Recruitment in endyr+1
   if(mceval_phase()) {
     stdev_rec = sqrt(norm2(value(log_rec_dev(1977 + recage,endyr - recage))-mean(value(log_rec_dev(1977 + recage,endyr - recage))))/(size_count(value(log_rec_dev(1977 + recage,endyr - recage))) - 1));
@@ -736,7 +735,6 @@ FUNCTION Get_Population_Projection
   N_proj(endyr+1,nages_M) = natage(endyr,nages_M-1) * S(endyr,nages_M-1) + natage(endyr,nages_M) * S(endyr,nages_M);
   tot_biom_proj(endyr+1) = N_proj(endyr+1) * wt;
   spawn_biom_proj(endyr+1) = elem_prod(N_proj(endyr+1),pow(mfexp(-yieldratio * FABC_tot_proj-natmort),spawn_fract)) * wt_mature;
-
 // Now loop through to endyr+15
   for (i=endyr+1;i<=endyr+15;i++) {
 
@@ -754,7 +752,6 @@ FUNCTION Get_Population_Projection
       ZOFL_proj(j) = FOFL_tot_proj(j) + natmort;
       S_proj(j) = mfexp(-1.0 * Z_proj(j));
     }
-
    // Catch 
     for (j=1;j<=nages_M;j++) { 
       catage_proj(i,j) = yieldratio * N_proj(i,j) * FABC_tot_proj(j) / Z_proj(j) * (1.-S_proj(j));
@@ -773,7 +770,9 @@ FUNCTION Get_Population_Projection
      else {
        N_proj(i+1,1)= value(mean(pred_rec(1979,endyr-recage))); }
      for (j=1; j<nages_M-1;j++) {
-       N_proj(i+1,j+1) = N_proj(i,j) * mfexp(-yieldratio*FABC_tot_proj(j)-natmort); }
+       N_proj(i+1,j+1) = N_proj(i,j) * mfexp(-yieldratio*FABC_tot_proj(j)-natmort); 
+       //    cout << "test.. i=" << i << "; j=" << j << "; N_proj(i,j)=" << N_proj(i,j) << endl;
+     }
      N_proj(i+1,nages_M) = N_proj(i,nages_M-1) * mfexp(-yieldratio*FABC_tot_proj(nages_M-1)-natmort)+ N_proj(i,nages_M) * mfexp(-yieldratio*FABC_tot_proj(nages_M)-natmort);
      spawn_biom_proj(i+1) = elem_prod(N_proj(i+1),pow(mfexp(-yieldratio*FABC_tot_proj-natmort),spawn_fract)) * wt_mature;
      tot_biom_proj(i+1) = N_proj(i+1)*wt;
