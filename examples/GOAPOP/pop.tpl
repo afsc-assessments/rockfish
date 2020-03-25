@@ -283,6 +283,7 @@ PARAMETER_SECTION
   vector               fish_sel2(1,nages_M);                   // vectory of fishery selectivty parameters on arithmetic scale
   vector               fish_sel3(1,nages_M);                   // vectory of fishery selectivty parameters on arithmetic scale
   vector               fish_sel4(1,nages_M);                   // vectory of fishery selectivty parameters on arithmetic scale
+  matrix               sel_fsh_1(styr,endyr,1,nages_M);
  
 // Trawl Survey selectivity
   init_number          a50_srv1(ph_srv1_sel);                  // age at 50% selection                                                   
@@ -467,10 +468,12 @@ FUNCTION Get_Selectivity
   expa50 = mfexp(a50); 
   expa502 = mfexp(a503); 
 
-  for (j=1;j<=nages_M;j++)  {
+  for (j=1;j<=nages_M;j++)  
+	{
     fish_sel1(j) = 1./(1. + mfexp(-2.944438979*(double(j)-a502)/delta2));
     fish_sel3(j)=(pow(j/expa50,expa50/(0.5*(sqrt(square(expa50)+4*square(delta))-expa50)))*mfexp((expa50-j)/(0.5*(sqrt(square(expa50)+4*square(delta))-expa50))));
-    fish_sel4(j)=(pow(j/expa502,expa502/(0.5*(sqrt(square(expa502)+4*square(delta3))-expa502)))*mfexp((expa502-j)/(0.5*(sqrt(square(expa502)+4*square(delta3))-expa502)))); }
+    fish_sel4(j)=(pow(j/expa502,expa502/(0.5*(sqrt(square(expa502)+4*square(delta3))-expa502)))*mfexp((expa502-j)/(0.5*(sqrt(square(expa502)+4*square(delta3))-expa502)))); 
+  }
   fish_sel2 = (fish_sel1 + fish_sel3)/2; 
   fish_sel3=fish_sel3/max(fish_sel3);
   fish_sel4=fish_sel4/max(fish_sel4);
@@ -500,6 +503,7 @@ FUNCTION Get_Mortality_Rates
 //==============================================================================================================================
 
   natmort = mfexp(logm);                                       // setting natural mortality to arithmetic scale
+	// weird...no need to do sdreport if being estimated...
   if(ph_m>0) nattymort=natmort; else nattymort=log_mean_rec;
   Fmort = mfexp(log_avg_F +  log_F_devs);                      // setting fishing mortaltiy to arithmetic scale
   for (iyr=styr; iyr<=1976; iyr++)
@@ -813,7 +817,6 @@ FUNCTION Evaluate_Objective_Function
 // Call functions to compute prior penalties
   Calc_Priors();                                               // Prior penalties for estimated parameters
   Rec_Like();                                                  // Penalty function for recruitment
-  F_Like();                                                    // Penalty function for fishing mortality deviations
 
 // Sum objective function
   Like              += ssqcatch ;
@@ -826,8 +829,11 @@ FUNCTION Evaluate_Objective_Function
   obj_fun           += sum(priors);
   obj_fun           += wt_rec_var * rec_like;
   if(active(log_F_devs))
+	{
+    F_Like();                                                    // Penalty function for fishing mortality deviations
     obj_fun         += F_mort_regularity;
-  if (current_phase()<3)
+  }
+	if (current_phase()<3)
       obj_fun       += norm2(F);   
   if (active(mF50)&&last_phase())
     obj_fun         += sprpen;                                 // To solve for the F40 etc.     
@@ -1171,6 +1177,674 @@ FUNCTION write_proj
  newproj <<"#_Spawners per recruitment (starting at 1977)"<<endl<<spawn_biom(1977,endyr-recage)/1000<< endl;
  newproj.close();
 
+FUNCTION Write_R
+  ofstream R_report("pop_R.rep");
+	/*
+  for (k=1;k<=nfsh;k++)
+  {
+    R_report<< "$sel_p1_fsh_"<<k<<endl<<sel_p1_fsh(k)<<endl;
+    R_report<< "$sel_p2_fsh_"<<k<<endl<<sel_p2_fsh(k)<<endl;
+    R_report<< "$sel_p3_fsh_"<<k<<endl<<sel_p3_fsh(k)<<endl;
+  }
+  R_Report(phizero);
+  R_Report(B100);
+  R_Report(B100.sd);
+  R_report<< "$repl_yld"<<endl<<repl_yld<<endl; 
+  R_report<< "$repl_SSB"<<endl<<repl_SSB<<endl; 
+  R_report<<"$M"<<endl; 
+  R_report<<M<<endl;
+  for (k=1;k<=nind;k++)
+  {
+    R_report<<"$q_"<<k<<endl; 
+    for (i=1;i<nyrs_ind(k);i++)
+    {        
+      int iyr=yrs_ind(k,i);
+      for (int ii=iyr;ii<yrs_ind(k,i+1);ii++)
+        R_report<<ii<<" "<<pow(q_ind(k,i),q_power_ind(k))<<endl;
+    }
+    R_report<<yrs_ind(k,nyrs_ind(k))<<" "<<pow(q_ind(k,nyrs_ind(k)),q_power_ind(k))<<endl;
+  }
+  R_report<<"$M_equil"<<endl; R_report<<natmort<<endl;
+  R_report<<"$SurvNextYr"<<endl; R_report<< pred_ind_nextyr <<endl;
+  R_report<<"$Yr"<<endl; for (i=styr;i<=endyr;i++) R_report<<i<<" "; R_report<<endl;
+  R_Report(P_age2len);
+  R_Report(len_bins);
+  R_report<<"$TotF"<<endl << Ftot<<endl;
+  R_report<<"$TotBiom_NoFish"<<endl; for (i=styr;i<=endyr;i++) 
+  {
+    double lb=value(totbiom_NoFish(i)/exp(2.*sqrt(log(1+square(totbiom_NoFish.sd(i))/square(totbiom_NoFish(i))))));
+    double ub=value(totbiom_NoFish(i)*exp(2.*sqrt(log(1+square(totbiom_NoFish.sd(i))/square(totbiom_NoFish(i))))));
+    R_report<<i<<" "<<totbiom_NoFish(i)<<" "<<totbiom_NoFish.sd(i)<<" "<<lb<<" "<<ub<<endl;
+  }
+  R_report<<"$SSB_NoFishR"<<endl; for (i=styr+1;i<=endyr;i++) 
+  {
+    double lb=value(Sp_Biom_NoFishRatio(i)/exp(2.*sqrt(log(1+square(Sp_Biom_NoFishRatio.sd(i))/square(Sp_Biom_NoFishRatio(i))))));
+    double ub=value(Sp_Biom_NoFishRatio(i)*exp(2.*sqrt(log(1+square(Sp_Biom_NoFishRatio.sd(i))/square(Sp_Biom_NoFishRatio(i))))));
+    R_report<<i<<" "<<Sp_Biom_NoFishRatio(i)<<" "<< Sp_Biom_NoFishRatio.sd(i)<<" "<<lb<<" "<<ub<<endl;
+  }
+
+  R_report<<"$TotBiom"<<endl; 
+  for (i=styr;i<=endyr+1;i++) 
+  {
+    double lb=value(totbiom(i)/exp(2.*sqrt(log(1+square(totbiom.sd(i))/square(totbiom(i))))));
+    double ub=value(totbiom(i)*exp(2.*sqrt(log(1+square(totbiom.sd(i))/square(totbiom(i))))));
+    R_report<<i<<" "<<totbiom(i)<<" "<<totbiom.sd(i)<<" "<<lb<<" "<<ub<<endl;
+  }
+
+  for (k=1;k<=5;k++){
+    R_report<<"$SSB_fut_"<<k<<endl; 
+    for (i=styr_fut;i<=endyr_fut;i++) 
+    {
+      double lb=value(SSB_fut(k,i)/exp(2.*sqrt(log(1+square(SSB_fut.sd(k,i))/square(SSB_fut(k,i))))));
+      double ub=value(SSB_fut(k,i)*exp(2.*sqrt(log(1+square(SSB_fut.sd(k,i))/square(SSB_fut(k,i))))));
+      R_report<<i<<" "<<SSB_fut(k,i)<<" "<<SSB_fut.sd(k,i)<<" "<<lb<<" "<<ub<<endl;
+    }
+  }
+  double ctmp;
+  for (k=1;k<=5;k++){
+    R_report<<"$Catch_fut_"<<k<<endl; 
+    for (i=styr_fut;i<=endyr_fut;i++) 
+    {
+      if (k==5) ctmp=0.;else ctmp=value(catch_future(k,i));
+      R_report<<i<<" "<<ctmp<<endl;
+    }
+  }
+	*/
+
+  R_report<<"$SSB"<<endl; for (i=styr;i<=endyr;i++) 
+  {
+    double lb=value(spawn_biom(i)/exp(2.*sqrt(log(1+square(spawn_biom.sd(i))/square(spawn_biom(i))))));
+    double ub=value(spawn_biom(i)*exp(2.*sqrt(log(1+square(spawn_biom.sd(i))/square(spawn_biom(i))))));
+    R_report<<i<<" "<<spawn_biom(i)<<" "<<spawn_biom.sd(i)<<" "<<lb<<" "<<ub<<endl;
+  }
+
+  R_report<<"$R"<<endl; for (i=styr;i<=endyr;i++) 
+  {
+    double lb=value(pred_rec(i)/exp(2.*sqrt(log(1+square(pred_rec.sd(i))/square(pred_rec(i))))));
+    double ub=value(pred_rec(i)*exp(2.*sqrt(log(1+square(pred_rec.sd(i))/square(pred_rec(i))))));
+    R_report<<i<<" "<<pred_rec(i)<<" "<<pred_rec.sd(i)<<" "<<lb<<" "<<ub<<endl;
+  }
+    R_report << "$N"<<endl;
+    for (i=styr;i<=endyr;i++) 
+      R_report <<   i << " "<< natage(i) << endl;
+    R_report   << endl;
+
+  /*
+    for (k=1;k<=nfsh;k++)
+    {
+      R_report << "$F_age_"<< (k) <<""<< endl ;
+      for (i=styr;i<=endyr;i++) 
+        R_report <<i<<" "<<F(k,i)<<" "<< endl;
+        R_report   << endl;
+    }
+    R_report <<endl<< "$Fshry_names"<< endl;
+    for (k=1;k<=nfsh;k++)
+      R_report << fshname(k) << endl ;
+
+    R_report <<endl<< "$Index_names"<< endl;
+    for (k=1;k<=nind;k++)
+      R_report << indname(k) << endl ;
+
+    for (k=1;k<=nind;k++)
+    {
+      int ii=1;
+			double qtmp;
+			qtmp = value(q_ind(k,1));
+      R_report <<endl<< "$Obs_Survey_"<< k <<""<< endl ;
+      for (i=styr;i<=endyr;i++)
+      {
+        if (ii<=yrs_ind(k).indexmax())
+        {
+          if (yrs_ind(k,ii)==i)
+          {
+						qtmp = value(q_ind(k,ii));
+            double PearsResid   =  value((obs_ind(k,ii)-pred_ind(k,ii))/obs_se_ind(k,ii) );
+            double lnPearsResid =  value((log(obs_ind(k,ii))-log(pred_ind(k,ii)))/obs_lse_ind(k,ii) );
+            R_report << i<< " "<< obs_ind(k,ii)   <<" "<< 
+                                  pred_ind(k,ii)  <<" "<< 
+                                  obs_se_ind(k,ii)<<" "<<  
+                                  PearsResid      <<" "<<
+                                  lnPearsResid    << endl; //values of survey index value (annual)
+            ii++;
+          }
+          else
+          {
+             int iyr=i; 
+             double predtmp = value(qtmp * pow(elem_prod(natage(iyr),pow(S(iyr),ind_month_frac(k))) * 
+                              elem_prod(sel_ind(k,iyr) , wt_ind(k,iyr)),q_power_ind(k)) );
+            R_report << i<< " NA "<< " "<< predtmp <<" NA NA NA"<<endl;
+          }
+        }
+        else
+        {
+          int iyr=i; 
+          double predtmp = value(qtmp * pow(elem_prod(natage(iyr),pow(S(iyr),ind_month_frac(k))) * 
+                            elem_prod(sel_ind(k,iyr) , wt_ind(k,iyr)),q_power_ind(k)) );
+          R_report << i<< " NA "<< " "<< predtmp <<" NA NA NA"<<endl;
+        }
+      }
+      R_report   << endl;
+      R_report << endl<< "$Index_Q_"<<k<<endl;
+      R_report<< q_ind(k) << endl;
+    }
+    R_report   << endl;
+    for (k=1;k<=nfsh;k++)
+    {
+      if (nyrs_fsh_age(k)>0) 
+      { 
+        R_report << "$pobs_fsh_"<< (k) <<""<< endl;
+        for (i=1;i<=nyrs_fsh_age(k);i++) 
+          R_report << yrs_fsh_age(k,i)<< " "<< oac_fsh(k,i) << endl;
+        R_report   << endl;
+
+        R_report << "$phat_fsh_"<< (k) <<""<< endl;
+        for (i=1;i<=nyrs_fsh_age(k);i++) 
+          R_report << yrs_fsh_age(k,i)<< " "<< eac_fsh(k,i) << endl;
+          R_report   << endl;
+
+        R_report << "$sdnr_age_fsh_"<< (k) <<""<< endl;
+        for (i=1;i<=nyrs_fsh_age(k);i++) 
+          R_report << yrs_fsh_age(k,i)<< " "<< sdnr( eac_fsh(k,i),oac_fsh(k,i),n_sample_fsh_age(k,i)) << endl;
+        R_report   << endl;
+      }
+      if (nyrs_fsh_length(k)>0) 
+      { 
+        R_report << "$pobs_len_fsh_"<< (k) <<""<< endl;
+        for (i=1;i<=nyrs_fsh_length(k);i++) 
+          R_report << yrs_fsh_length(k,i)<< " "<< olc_fsh(k,i) << endl;
+        R_report   << endl;
+
+        R_report << "$phat_len_fsh_"<< (k) <<""<< endl;
+        for (i=1;i<=nyrs_fsh_length(k);i++) 
+          R_report << yrs_fsh_length(k,i)<< " "<< elc_fsh(k,i) << endl;
+        R_report   << endl;
+
+        R_report << "$sdnr_length_fsh_"<< (k) <<""<< endl;
+        for (i=1;i<=nyrs_fsh_length(k);i++) 
+          R_report << yrs_fsh_length(k,i)<< " "<< sdnr( elc_fsh(k,i),olc_fsh(k,i),n_sample_fsh_length(k,i)) << endl;
+        R_report   << endl;
+      }
+    }
+    for (k=1;k<=nind;k++)
+    {
+      if (nyrs_ind_age(k)>0) 
+      { 
+        R_report << "$pobs_ind_"<<(k)<<""<<  endl;
+        for (i=1;i<=nyrs_ind_age(k);i++) 
+          R_report << yrs_ind_age(k,i)<< " "<< oac_ind(k,i) << endl;
+        R_report   << endl;
+        
+        R_report << "$phat_ind_"<<(k)<<""<<  endl;
+        for (i=1;i<=nyrs_ind_age(k);i++) 
+          R_report << yrs_ind_age(k,i)<< " "<< eac_ind(k,i) << endl;
+        R_report   << endl;
+
+        R_report << "$sdnr_age_ind_"<< (k) <<""<< endl;
+        for (i=1;i<=nyrs_ind_age(k);i++) 
+          R_report << yrs_ind_age(k,i)<< " "<< sdnr( eac_ind(k,i),oac_ind(k,i),n_sample_ind_age(k,i)) << endl;
+        R_report   << endl;
+      }
+      if (nyrs_ind_length(k)>0) 
+      { 
+        R_report << "$pobs_len_ind_"<< (k) <<""<< endl;
+        for (i=1;i<=nyrs_ind_length(k);i++) 
+          R_report << yrs_ind_length(k,i)<< " "<< olc_ind(k,i) << endl;
+        R_report   << endl;
+        R_report << "$phat_len_ind_"<< (k) <<""<< endl;
+        for (i=1;i<=nyrs_ind_length(k);i++) 
+          R_report << yrs_ind_length(k,i)<< " "<< elc_ind(k,i) << endl;
+        R_report   << endl;
+        R_report << "$sdnr_length_ind_"<< (k) <<""<< endl;
+        for (i=1;i<=nyrs_ind_length(k);i++) 
+          R_report << yrs_ind_length(k,i)<< " "<< sdnr( eac_ind(k,i),oac_ind(k,i),n_sample_ind_length(k,i)) << endl;
+        R_report   << endl;
+
+      } 
+    }
+    for (k=1;k<=nind;k++)
+		{
+      R_report <<"$sdnr_ind_"<<k<<endl;
+			R_report << std_dev(elem_div((pred_ind(k)-obs_ind(k)),obs_se_ind(k)))<<endl;
+		}
+    for (k=1;k<=nfsh;k++)
+    {
+      R_report << endl<< "$Obs_catch_"<<(k) << endl;
+      R_report << catch_bio(k) << endl;
+      R_report   << endl;
+      R_report << "$Pred_catch_" <<(k) << endl;
+      R_report << pred_catch(k) << endl;
+      R_report   << endl;
+    }
+
+    for (k=1;k<=nfsh;k++)
+    {
+      R_report << "$F_fsh_"<<(k)<<" "<<endl;
+      for (i=styr;i<=endyr;i++)
+      {
+        R_report<< i<< " ";
+        R_report<< mean(F(k,i)) <<" "<< mean(F(k,i))*max(sel_fsh(k,i)) << " ";
+        R_report<< endl;
+      }
+    }
+		*/
+
+     // To make same name as in AMAK...
+     R_report << endl<< "$sel_fsh_1"<< endl;
+     for (i=styr;i<=endyr;i++)
+        R_report << 1 <<"  "<< i<<" "<<F(i)/max(F(i)) << endl; 
+     R_report   << endl;
+  /*
+    for (k=1;k<=nind;k++)
+    {
+      R_report << endl<< "$sel_ind_"<<(k)<<"" << endl;
+      for (i=styr;i<=endyr;i++)
+        R_report << k <<"  "<< i<<" "<<sel_ind(k,i) << endl;
+        R_report << endl;
+
+    }
+    R_report << endl<< "$Stock_Rec"<< endl;
+    for (i=styr_rec;i<=endyr;i++)
+      if (active(log_Rzero))
+        R_report << i<< " "<<Sp_Biom(i-rec_age)<< " "<< SRecruit(Sp_Biom(i-rec_age))<< " "<< mod_rec(i)<<endl;
+      else 
+        R_report << i<< " "<<Sp_Biom(i-rec_age)<< " "<< " 999" << " "<< mod_rec(i)<<endl;
+        
+        R_report   << endl;
+
+    R_report <<"$stock_Rec_Curve"<<endl;
+    R_report <<"0 0"<<endl;
+    dvariable stock;
+    for (i=1;i<=30;i++)
+    {
+      stock = double (i) * Bzero /25.;
+      if (active(log_Rzero))
+        R_report << stock <<" "<< SRecruit(stock)<<endl;
+      else
+        R_report << stock <<" 99 "<<endl;
+    }
+    R_report   << endl;
+
+    R_report   << endl<<"$Like_Comp" <<endl;
+    obj_comps(13)= obj_fun - sum(obj_comps) ; // Residual 
+    obj_comps(14)= obj_fun ;                  // Total
+    R_report   <<obj_comps<<endl;
+    R_report   << endl;
+    R_report   << endl<<"$Like_Comp_names" <<endl;
+    R_report   <<"catch_like     "<<endl
+             <<"age_like_fsh     "<<endl
+             <<"length_like_fsh     "<<endl
+             <<"sel_like_fsh     "<<endl
+             <<"ind_like        "<<endl
+             <<"age_like_ind     "<<endl
+               <<"length_like_ind  "<<endl
+             <<"sel_like_ind     "<<endl
+             <<"rec_like         "<<endl
+             <<"fpen             "<<endl
+             <<"post_priors_indq "<<endl
+             <<"post_priors      "<<endl
+             <<"residual         "<<endl
+             <<"total            "<<endl;
+    for (k=1;k<=nfsh;k++)
+    {
+      R_report << "$Sel_Fshry_"<< (k) <<""<<endl;
+      R_report << sel_like_fsh(k) << endl;
+    }
+    R_report   << endl;
+  
+    for (k=1;k<=nind;k++)
+    {
+      R_report << "$Survey_Index_"<< (k) <<"" <<endl;
+      R_report<< ind_like(k)<<endl;
+    }
+    R_report   << endl;
+
+    R_report << setw(10)<< setfixed() << setprecision(5) <<endl;
+    for (k=1;k<=nind;k++)
+    {
+      R_report << "$Age_Survey_"<< (k) <<"" <<endl;
+      R_report << age_like_ind(k)<<endl;
+    }
+    R_report   << endl;
+
+    for (k=1;k<=nind;k++)
+    {
+      R_report << "$Sel_Survey_"<< (k) <<""<<endl;
+      R_report<< sel_like_ind(k,1) <<" "<<sel_like_ind(k,2)<<" "<<sel_like_ind(k,3)<< endl;
+    }
+    R_report   << endl;
+
+    R_report << setw(10)<< setfixed() << setprecision(5) <<endl;
+    R_report   << "$Rec_Pen" <<endl<<sigmar<<"  "<<rec_like<<endl;
+    R_report   << endl;
+    R_Report(m_sigmar);
+    R_Report(sigmar);
+
+    R_report   << "$F_Pen" <<endl;
+    R_report<<fpen(1)<<"  "<<fpen(2)<<endl;
+    R_report   << endl;
+    for (k=1;k<=nind;k++)
+    {
+      R_report << "$Q_Survey_"<< (k) <<""<<endl
+             << " "<<post_priors_indq(k)
+             << " "<< q_ind(k,1)
+             << " "<< qprior(k)
+             << " "<< cvqprior(k)<<endl;
+      R_report << "$Q_power_Survey_"<< (k) <<""<<endl
+             << " "<<post_priors_indq(k)
+             << " "<< q_power_ind(k)
+             << " "<< q_power_prior(k)
+             << " "<< cvq_power_prior(k)<<endl;
+    }
+             R_report   << endl;
+    R_report << "$Mest"<<endl;
+    R_report << " "<< post_priors(1)
+             << " "<< Mest
+             << " "<< natmortprior
+             << " "<< cvnatmortprior <<endl;
+    R_report   << endl;
+    R_report << "$Steep"<<endl;
+    R_report << " "<< post_priors(2)
+             << " "<< steepness
+             << " "<< steepnessprior
+             << " "<< cvsteepnessprior <<endl;
+    R_report   << endl;
+    R_report << "$Sigmar"<<endl;
+    R_report << " "<< post_priors(3)
+             << " "<< sigmar
+             << " "<< sigmarprior
+             << " "<< cvsigmarprior <<endl;
+    R_report   << endl;
+    R_report<<"$Num_parameters_Est"<<endl;
+    R_report<<initial_params::nvarcalc()<<endl;
+    R_report   << endl;
+    
+  R_report<<"$Steep_Prior" <<endl;
+  R_report<<steepnessprior<<" "<<
+    cvsteepnessprior<<" "<<
+    phase_srec<<" "<< endl;
+    R_report   << endl;
+
+  R_report<<"$sigmarPrior " <<endl;
+  R_report<<sigmarprior<<" "<<  cvsigmarprior <<" "<<phase_sigmar<<endl;
+  R_report   << endl;
+
+  R_report<<"$Rec_estimated_in_styr_endyr " <<endl;
+  R_report<<styr_rec    <<" "<<endyr        <<" "<<endl;
+  R_report   << endl;
+  R_report<<"$SR_Curve_fit__in_styr_endyr " <<endl;
+  R_report<<styr_rec_est<<" "<<endyr_rec_est<<" "<<endl;
+  R_report   << endl;
+  R_report<<"$Model_styr_endyr" <<endl;
+  R_report<<styr        <<" "<<endyr        <<" "<<endl;
+  R_report   << endl;
+
+  R_report<<"$M_prior "<<endl;
+  R_report<< natmortprior<< " "<< cvnatmortprior<<" "<<phase_M<<endl;
+  R_report   << endl;
+  R_report<<"$qprior " <<endl;
+  R_report<< qprior<<" "<<cvqprior<<" "<< phase_q<<endl;
+  R_report<<"$q_power_prior " <<endl;
+  R_report<< q_power_prior<<" "<<cvq_power_prior<<" "<< phase_q_power<<endl;
+  R_report   << endl;
+
+  R_report<<"$cv_catchbiomass " <<endl;
+  R_report<<cv_catchbiomass<<" "<<endl;
+  R_report   << endl;
+  R_report<<"$Projection_years"<<endl;
+  R_report<< nproj_yrs<<endl;
+  R_report   << endl;
+  
+  R_report << "$Fsh_sel_opt_fish "<<endl;
+  for (k=1;k<=nfsh;k++)
+    R_report<<k<<" "<<fsh_sel_opt(k)<<" "<<sel_change_in_fsh(k)<<endl;
+    R_report   << endl;
+   R_report<<"$Survey_Sel_Opt_Survey " <<endl;
+  for (k=1;k<=nind;k++)
+  R_report<<k<<" "<<(ind_sel_opt(k))<<endl;
+  R_report   << endl;
+    
+  R_report <<"$Phase_survey_Sel_Coffs "<<endl;
+  R_report <<phase_selcoff_ind<<endl;
+  R_report   << endl;
+  R_report <<"$Fshry_Selages " << endl;
+  R_report << nselages_in_fsh  <<endl;
+  R_report   << endl;
+  R_report <<"$Survy_Selages " <<endl;
+  R_report <<nselages_in_ind <<endl;
+  R_report   << endl;
+
+  R_report << "$Phase_for_age_spec_fishery"<<endl;
+  R_report <<phase_selcoff_fsh<<endl;
+  R_report   << endl;
+  R_report << "$Phase_for_logistic_fishery"<<endl;
+  R_report <<phase_logist_fsh<<endl;
+  R_report   << endl;
+  R_report << "$Phase_for_dble_logistic_fishery "<<endl;
+  R_report <<phase_dlogist_fsh<<endl;
+  R_report   << endl;
+
+  R_report << "$Phase_for_age_spec_survey  "<<endl;
+  R_report <<phase_selcoff_ind<<endl;
+  R_report   << endl;
+  R_report << "$Phase_for_logistic_survey  "<<endl;
+  R_report <<phase_logist_ind<<endl;
+  R_report   << endl;
+  R_report << "$Phase_for_dble_logistic_indy "<<endl;
+  R_report <<phase_dlogist_ind<<endl;
+  R_report   << endl;
+  
+  for (k=1;k<=nfsh;k++)
+  {
+    if (nyrs_fsh_age(k)>0)
+    {
+      R_report << "$Francis_wt_fsh_age_"<<k<<endl;
+      double fwtmp;
+      fwtmp = calc_Francis_weights(oac_fsh(k),eac_fsh(k),n_sample_fsh_age(k)) ;
+      R_report << fwtmp <<endl;
+      // cout << fwtmp <<endl;
+      R_report <<"$EffN_Fsh_"<<(k)<<""<<endl;
+      for (i=1;i<=nyrs_fsh_age(k);i++)
+      {
+        double sda_tmp = Sd_age(oac_fsh(k,i));
+        R_report << yrs_fsh_age(k,i);
+        R_report << " "<<Eff_N(oac_fsh(k,i),eac_fsh(k,i)) ;
+        R_report << " "<<Eff_N2(oac_fsh(k,i),eac_fsh(k,i));
+        R_report << " "<<mn_age(oac_fsh(k,i));
+        R_report << " "<<mn_age(eac_fsh(k,i));
+        R_report << " "<<sda_tmp;
+        R_report << " "<<mn_age(oac_fsh(k,i)) - sda_tmp *2. / sqrt(n_sample_fsh_age(k,i));
+        R_report << " "<<mn_age(oac_fsh(k,i)) + sda_tmp *2. / sqrt(n_sample_fsh_age(k,i));
+        R_report <<endl;
+      }
+    }
+  }
+  
+  for (k=1;k<=nfsh;k++)
+  {
+    if (nyrs_fsh_length(k)>0)
+    {
+      R_report << "$Francis_wt_fsh_len_"<<k<<endl;
+      R_report << calc_Francis_weights(olc_fsh(k),elc_fsh(k),n_sample_fsh_length(k)) <<endl;
+      R_report <<"$EffN_Length_Fsh_"<<(k)<<""<<endl;
+      for (i=1;i<=nyrs_fsh_length(k);i++)
+      {
+        double sda_tmp = Sd_length(olc_fsh(k,i));
+        R_report << yrs_fsh_length(k,i);
+        R_report << " "<<Eff_N(olc_fsh(k,i),elc_fsh(k,i)) ;
+        R_report << " "<<Eff_N2_L(olc_fsh(k,i),elc_fsh(k,i));
+        R_report << " "<<mn_length(olc_fsh(k,i));
+        R_report << " "<<mn_length(elc_fsh(k,i));
+        R_report << " "<<sda_tmp;
+        R_report << " "<<mn_length(olc_fsh(k,i)) - sda_tmp *2. / sqrt(n_sample_fsh_length(k,i));
+        R_report << " "<<mn_length(olc_fsh(k,i)) + sda_tmp *2. / sqrt(n_sample_fsh_length(k,i));
+        R_report <<endl;
+      }
+    }
+  }
+
+
+  for (k=1;k<=nfsh;k++)
+  {
+    R_report <<"$C_fsh_" <<(k)<<"" << endl; 
+    for (i=styr;i<=endyr;i++)
+      R_report <<i<<" "<<catage(k,i)<< endl;
+  }
+
+  R_report <<"$wt_a_pop" << endl<< wt_pop  <<endl;
+  R_report <<"$mature_a" << endl<< maturity<<endl;
+  for (k=1;k<=nfsh;k++)
+  {
+    R_report <<"$wt_fsh_"<<(k)<<""<<endl;
+    for (i=styr;i<=endyr;i++)
+      R_report <<i<<" "<<wt_fsh(k,i)<< endl;
+  }
+  
+  for (k=1;k<=nind;k++)
+  {
+    R_report <<"$wt_ind_"<<(k)<<""<<endl;
+    for (i=styr;i<=endyr;i++)
+      R_report <<i<<" "<<wt_ind(k,i)<< endl;
+  }
+  for (k=1;k<=nind;k++)
+  {
+    if (nyrs_ind_age(k)>0)
+    {
+      R_report << "$Francis_wt_ind_age_"<<k<<endl;
+      R_report << calc_Francis_weights(oac_ind(k),eac_ind(k),n_sample_ind_age(k)) <<endl;
+      R_report <<"$EffN_Survey_"<<(k)<<""<<endl;
+      for (i=1;i<=nyrs_ind_age(k);i++)
+      {
+        double sda_tmp = Sd_age(oac_ind(k,i));
+        R_report << yrs_ind_age(k,i)
+                 << " "<<Eff_N(oac_ind(k,i),eac_ind(k,i)) 
+                 << " "<<Eff_N2(oac_ind(k,i),eac_ind(k,i))
+                 << " "<<mn_age(oac_ind(k,i))
+                 << " "<<mn_age(eac_ind(k,i))
+                 << " "<<sda_tmp
+                 << " "<<mn_age(oac_ind(k,i)) - sda_tmp *2. / sqrt(n_sample_ind_age(k,i))
+                 << " "<<mn_age(oac_ind(k,i)) + sda_tmp *2. / sqrt(n_sample_ind_age(k,i))
+                 <<endl;
+      }
+    }
+  }
+  for (k=1;k<=nind;k++)
+  {
+    if (nyrs_ind_length(k)>0)
+    {
+      R_report << "$Francis_wt_ind_len_"<<k<<endl;
+      R_report << calc_Francis_weights(olc_ind(k),elc_ind(k),n_sample_ind_length(k)) <<endl;
+      R_report <<"$EffN_Length_Survey_"<<(k)<<""<<endl;
+      for (i=1;i<=nyrs_ind_length(k);i++)
+      {
+        double sda_tmp = Sd_age(olc_ind(k,i));
+        R_report << yrs_ind_length(k,i)
+                 << " "<<Eff_N(olc_ind(k,i),elc_ind(k,i)) 
+                 << " "<<Eff_N2_L(olc_ind(k,i),elc_ind(k,i))
+                 << " "<<mn_length(olc_ind(k,i))
+                 << " "<<mn_length(elc_ind(k,i))
+                 << " "<<sda_tmp
+                 << " "<<mn_length(olc_ind(k,i)) - sda_tmp *2. / sqrt(n_sample_ind_length(k,i))
+                 << " "<<mn_length(olc_ind(k,i)) + sda_tmp *2. / sqrt(n_sample_ind_length(k,i))
+                 <<endl;
+      }
+    }
+  }
+  
+  R_report<<"$msy_mt"<<endl; 
+  dvar_matrix sel_tmp(1,nages,1,nfsh);
+  dvariable sumF;
+  sel_tmp.initialize();
+  for (i=styr;i<=endyr;i++) 
+  { 
+    sumF=0.;
+    for (k=1;k<=nfsh;k++)
+    {
+      Fratio(k) = sum(F(k,i)) ;
+      sumF += Fratio(k) ;
+    }
+    Fratio /= sumF;
+    sumF /= nages;
+    for (k=1;k<=nfsh;k++)
+      for (j=1;j<=nages;j++)
+        sel_tmp(j,k) = sel_fsh(k,i,j); 
+    get_msy(i);
+    // important for time-varying natural mortality...
+    dvariable spr_mt_ft = spr_ratio(sumF,sel_tmp,i)  ;
+    // Yr Fspr 1-Fspr F/Fmsy Fmsy F Fsprmsy MSY MSYL Bmsy Bzero B/Bmsy
+    R_report<< i<<
+            " "<< spr_mt_ft                   <<
+            " "<< (1.-spr_mt_ft)              << 
+            " "<< Fcur_Fmsy                   <<
+            " "<< Fmsy                        <<
+            " "<< sumF                        <<
+            " "<< spr_ratio(Fmsy,sel_tmp,i)   <<
+            " "<< MSY                         <<
+            " "<< MSYL                        <<
+            " "<< Bmsy                        <<
+            " "<< Bzero                       <<
+            " "<< Sp_Biom(i)                  <<
+            " "<< Bcur_Bmsy                   <<
+            endl ;
+  }
+  R_report<<"$age2len"<<endl; 
+  R_report<<P_age2len<<endl;
+  R_report<<"$msy_m0"<<endl; 
+  sel_tmp.initialize();
+  // NOTE Danger here
+  dvar_matrix mtmp = M;
+  for (i=styr;i<=endyr;i++) 
+  { 
+    M(i) = M(styr);
+    sumF=0.;
+    for (k=1;k<=nfsh;k++)
+    {
+      Fratio(k) = sum(F(k,i)) ;
+      sumF += Fratio(k) ;
+    }
+    Fratio /= sumF;
+    for (k=1;k<=nfsh;k++)
+      for (j=1;j<=nages;j++)
+        sel_tmp(j,k) = sel_fsh(k,i,j); 
+    get_msy(i);
+    sumF /= nages;
+    // important for time-varying natural mortality...
+    dvariable spr_mt_ft = spr_ratio(sumF,sel_tmp,i)  ;
+    dvariable spr_mt_f0 = spr_ratio(0.,sel_tmp,i)  ;
+    R_report<< i<<
+            " "<< spr_mt_ft                   <<
+            " "<< spr_mt_f0                   <<
+            " "<< (1.-spr_mt_f0)/(1-spr_mt_ft)<< 
+            " "<< Fcur_Fmsy                   <<
+            " "<< Fmsy                        <<
+            " "<< sumF                        <<
+            " "<< spr_ratio(Fmsy,sel_tmp,i)   <<
+            " "<< MSY                         <<
+            " "<< Bmsy                        <<
+            " "<< MSYL                        <<
+            " "<< Bcur_Bmsy                   <<
+            endl ;
+  }
+
+  M = mtmp;
+  R_Report(F40_est);
+  R_Report(F35_est);      
+
+  R_report<<"$sumBiom"<<endl; 
+  for (i=styr;i<=endyr+1;i++) 
+  {
+    double lb=value(sumBiom(i)/exp(2.*sqrt(log(1+square(sumBiom.sd(i))/square(sumBiom(i))))));
+    double ub=value(sumBiom(i)*exp(2.*sqrt(log(1+square(sumBiom.sd(i))/square(sumBiom(i))))));
+    R_report<<i<<" "<<sumBiom(i)<<" "<<sumBiom.sd(i)<<" "<<lb<<" "<<ub<<endl;
+  }
+  R_Report(tau);      
+	*/
+
+  R_report.close();
+
+FINAL_SECTION
+  Write_R();
+
+
 //==============================================================================================================================
 GLOBALS_SECTION
 //==============================================================================================================================
@@ -1178,6 +1852,10 @@ GLOBALS_SECTION
  # include "admodel.h"
   adstring model_name;
   adstring data_file;
+	#undef R_Report 
+  /// for R report 
+	#define R_Report(object) R_report << "$"#object "\n" << object << endl;
+	/** Prints name and value of \a object on ADMB report %ofstream file.  */
 TOP_OF_MAIN_SECTION
   gradient_structure::set_MAX_NVAR_OFFSET(1000);
   gradient_structure::set_GRADSTACK_BUFFER_SIZE(100000);
