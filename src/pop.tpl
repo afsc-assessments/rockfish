@@ -83,6 +83,10 @@ DATA_SECTION
   init_number          wt_avg_sel                              // Average selectivity penalty
   init_number          initial_LMR                             // Initial value for log mean recruitment
   init_number          yieldratio                              // Ratio of catch to ABC over most recent 3 years
+  init_int             fishselopt                              // Option for selectivity type
+  init_int             num_yrs_sel_ch                          // number of years selectivity changes
+  init_ivector         yrs_sel_ch(1,num_yrs_sel_ch)            // years selectivity changes
+  init_vector          sigma_sel_ch(1,num_yrs_sel_ch)          // sigma (cv) of selectivity changes
 
 //==============================================================================================================================
 
@@ -277,12 +281,14 @@ PARAMETER_SECTION
   init_number          delta2(ph_fish_sel);                    // age between 50% selection and 95% selection....
   init_number          a503(ph_fish_sel);                      // age at 50% selection                                                   
   init_number          delta3(ph_fish_sel);                    // age between 50% selection and 95% selection....
+	init_vector          selp(1,3)                               // 3 par double logistic, p1=age 5% select, p2=dist from 5% to 95%, p3= dist from "95%" and desc 5%
   number               expa50;                                 // gamma selectivity parameter
   number               expa502;                                // gamma selectivity parameter
   vector               fish_sel1(1,nages_M);                    // vectory of fishery selectivty parameters on arithmetic scale
   vector               fish_sel2(1,nages_M);                   // vectory of fishery selectivty parameters on arithmetic scale
   vector               fish_sel3(1,nages_M);                   // vectory of fishery selectivty parameters on arithmetic scale
   vector               fish_sel4(1,nages_M);                   // vectory of fishery selectivty parameters on arithmetic scale
+	matrix               fish_sel(styr,endyr,1,nages_M)
  
 // Trawl Survey selectivity
   init_number          a50_srv1(ph_srv1_sel);                  // age at 50% selection                                                   
@@ -461,18 +467,28 @@ PROCEDURE_SECTION
 //==============================================================================================================================
 FUNCTION Get_Selectivity
 //==============================================================================================================================
+  switch (fishselopt)
+  {
+    case 2:
+    {
+      break;
+    }
+    case 1:
+    {
+    // Fishery Selectivity
+      expa50 = mfexp(a50); 
+      expa502 = mfexp(a503); 
 
-// Fishery Selectivity
-  expa50 = mfexp(a50); 
-  expa502 = mfexp(a503); 
+      for (j=1;j<=nages_M;j++)  {
+        fish_sel1(j) = 1./(1. + mfexp(-2.944438979*(double(j)-a502)/delta2));
+        fish_sel3(j)=(pow(j/expa50,expa50/(0.5*(sqrt(square(expa50)+4*square(delta))-expa50)))*mfexp((expa50-j)/(0.5*(sqrt(square(expa50)+4*square(delta))-expa50))));
+        fish_sel4(j)=(pow(j/expa502,expa502/(0.5*(sqrt(square(expa502)+4*square(delta3))-expa502)))*mfexp((expa502-j)/(0.5*(sqrt(square(expa502)+4*square(delta3))-expa502)))); }
+      fish_sel2 = (fish_sel1 + fish_sel3)/2; 
+      fish_sel3=fish_sel3/max(fish_sel3);
+      fish_sel4=fish_sel4/max(fish_sel4);
+    }
+  }
 
-  for (j=1;j<=nages_M;j++)  {
-    fish_sel1(j) = 1./(1. + mfexp(-2.944438979*(double(j)-a502)/delta2));
-    fish_sel3(j)=(pow(j/expa50,expa50/(0.5*(sqrt(square(expa50)+4*square(delta))-expa50)))*mfexp((expa50-j)/(0.5*(sqrt(square(expa50)+4*square(delta))-expa50))));
-    fish_sel4(j)=(pow(j/expa502,expa502/(0.5*(sqrt(square(expa502)+4*square(delta3))-expa502)))*mfexp((expa502-j)/(0.5*(sqrt(square(expa502)+4*square(delta3))-expa502)))); }
-  fish_sel2 = (fish_sel1 + fish_sel3)/2; 
-  fish_sel3=fish_sel3/max(fish_sel3);
-  fish_sel4=fish_sel4/max(fish_sel4);
 
 // Bottom Trawl Survey Selectivity
   for (j=1;j<=nages_M;j++)

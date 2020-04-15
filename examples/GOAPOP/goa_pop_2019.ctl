@@ -36,3 +36,7 @@ goa_pop_2019.dat	# data_file
 1	# wt_avg_sel
 3	# initial_LMR
 0.930281561198426	# yieldratio
+2 # fishselopt
+1 # num_yrs_sel_ch
+1980 # yrs_sel_ch
+0.7 # sigma_sel_ch
